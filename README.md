@@ -2,7 +2,7 @@
 
 An interactive data science dashboard built to analyse delivery driver performance across a fleet of 52 associates. Built using real operational scorecard data from an Amazon DSP (Delivery Service Partner), this tool applies unsupervised machine learning to surface performance patterns and flag unusual behaviour that would not be visible from raw scores alone.
 
-**Live app:** [Driver Performance Dashboard](https://your-streamlit-link-here)
+**Live app:** https://amazon-delivery-dashboard-dadt4ftmsbv29om9si2uib.streamlit.app/
 
 ---
 
