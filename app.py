@@ -9,6 +9,7 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans, DBSCAN
 from sklearn.decomposition import PCA
+from sklearn.neighbors import NearestNeighbors
 import plotly.express as px
 import plotly.graph_objects as go
 
@@ -22,8 +23,9 @@ st.set_page_config(
 # ── Header ────────────────────────────────────────────────────────────────────
 st.title("🚚 Amazon Delivery Driver Performance Analytics")
 st.markdown(
-    "Upload a weekly scorecard CSV to run K-Means clustering and "
-    "DBSCAN anomaly detection across your driver fleet."
+    "Upload one weekly scorecard CSV to group your DAs with K-Means clustering "
+    "and flag unusual ones with DBSCAN anomaly detection. To compare several "
+    "weeks and get coaching flags, open **Trends Over Time** in the sidebar."
 )
 st.divider()
 
@@ -50,8 +52,8 @@ if uploaded is not None:
     week_label = uploaded.name
 else:
     df_raw = pd.read_csv("sample_scorecard.csv")
-    week_label = "Week 9 (Sample Data)"
-    st.sidebar.info("Using sample Week 9 data. Upload your own CSV to analyse a different week.")
+    week_label = "Demo data (latest week, fake DAs)"
+    st.sidebar.info("Using demo data with fake DAs. Upload your own CSV to analyse a real week.")
 
 st.sidebar.markdown(f"**Loaded:** {week_label}")
 
@@ -87,11 +89,20 @@ for col in features:
             .astype(float)
         )
 
-df = df.dropna(subset=features)
+# Scorecards sometimes leave a cell blank (often Contact Compliance). We keep
+# those DAs, and fill the gap with the fleet median for the models only. The
+# tables below still show the blank.
+blanks = df[features].isna().any(axis=1).sum()
+model_input = df[features].fillna(df[features].median())
+if blanks:
+    st.sidebar.caption(
+        f"{blanks} DA(s) have a blank metric. They are kept, and the blank is "
+        "filled with the fleet median for clustering only."
+    )
 
 # Normalise
 scaler = StandardScaler()
-df_scaled_arr = scaler.fit_transform(df[features])
+df_scaled_arr = scaler.fit_transform(model_input)
 df_scaled = pd.DataFrame(df_scaled_arr, columns=features, index=df.index)
 
 # K-Means
@@ -108,7 +119,14 @@ df["PCA1"] = pca_result[:, 0]
 df["PCA2"] = pca_result[:, 1]
 
 # DBSCAN
-dbscan = DBSCAN(eps=1.5, min_samples=5)
+# eps (how close counts as "near") is set from the data rather than fixed:
+# it's the distance within which 85% of DAs have at least 4 other DAs nearby
+# (5 points including themselves, which is how DBSCAN counts).
+# A fixed number flags far too many DAs on some weeks and none on others.
+MIN_SAMPLES = 5
+nn_dist, _ = NearestNeighbors(n_neighbors=MIN_SAMPLES).fit(df_scaled_arr).kneighbors(df_scaled_arr)
+eps = float(np.quantile(nn_dist[:, -1], 0.85))
+dbscan = DBSCAN(eps=eps, min_samples=MIN_SAMPLES)
 df["Anomaly Raw"] = dbscan.fit_predict(df_scaled_arr)
 df["Anomaly"] = df["Anomaly Raw"].apply(
     lambda x: "🚨 Anomaly" if x == -1 else "✅ Normal"
@@ -190,7 +208,7 @@ fig_kmeans = px.scatter(
     plot_df, x="PCA1", y="PCA2",
     color="Cluster Label",
     hover_data=["Transporter ID", "Total Score", "Status"],
-    title="K-Means Clustering — Each point is a driver",
+    title="K-Means clustering: each point is a DA",
     color_discrete_sequence=px.colors.qualitative.Bold
 )
 fig_kmeans.update_traces(marker=dict(size=10, opacity=0.8))
@@ -201,7 +219,7 @@ with st.expander("What does this chart mean?"):
         "Each dot is a driver. K-Means groups drivers into 3 clusters based on "
         "their performance across all 8 KPIs. Drivers in the same cluster have "
         "similar performance patterns. PCA reduces the 8 dimensions down to 2 "
-        "so we can plot it — the axes do not have a direct meaning but the "
+        "so we can plot it. The axes do not have a direct meaning, but the "
         "distance between points does."
     )
 
@@ -231,7 +249,7 @@ else:
     st.plotly_chart(fig_dbscan, use_container_width=True)
 
     if anomalies > 0:
-        st.warning(f"**{anomalies} driver(s) flagged as anomalies** — these drivers sit outside normal cluster patterns and warrant closer review.")
+        st.warning(f"**{anomalies} driver(s) flagged as anomalies.** These DAs sit outside the normal patterns and are worth a closer look.")
         anomaly_table = df[df["Anomaly Raw"] == -1][
             ["Transporter ID", "Status", "Total Score", "Customer Feedback", "Contact Compliance"]
         ].reset_index(drop=True)
@@ -240,9 +258,12 @@ else:
 with st.expander("What does anomaly detection mean?"):
     st.markdown(
         "DBSCAN identifies drivers whose performance pattern does not fit any "
-        "cluster. These are not necessarily the worst performers — they are the "
+        "cluster. These are not necessarily the worst performers. They are the "
         "most unusual ones. A driver scoring extremely high in one area but very "
-        "low in another might be flagged even if their total score looks fine."
+        "low in another might be flagged even if their total score looks fine.\n\n"
+        "How close counts as \"near\" is worked out from each week's data: it's the "
+        "distance within which 85% of DAs have at least 4 other DAs nearby. So only "
+        "the genuinely isolated DAs are flagged, rather than a fixed share."
     )
 
 st.divider()
@@ -262,7 +283,7 @@ fig_kpi = px.bar(
         "🟡 Medium": "#f59e0b",
         "🟢 High": "#10b981"
     },
-    title=f"{selected_kpi} — All Drivers",
+    title=f"{selected_kpi}: all DAs",
     labels={"Transporter ID": "Driver ID"}
 )
 fig_kpi.update_layout(xaxis_tickangle=-90)
@@ -286,7 +307,7 @@ st.dataframe(
 )
 
 st.caption(
-    "Built by Meschac Goredji — MSc Computer Science, University of Kent. "
-    "Analysis uses K-Means clustering and DBSCAN anomaly detection on real "
-    "operational delivery scorecard data."
+    "Built by Meschac Goredji, MSc Computer Science (University of Kent) and former "
+    "Amazon delivery associate. The demo uses generated data with fake DAs; no real "
+    "driver data is included."
 )
