@@ -58,15 +58,18 @@ def pct(x):
 
 
 # ── Build the driver roster ───────────────────────────────────────────────────
-trends = (["improving"] * 8 + ["declining"] * 8 +
-          ["flat"] * 18 + ["volatile"] * 6)
+# "slipping" = a good DA whose score drops slowly, so they stay on a good
+# tier while sliding. These are the ones the weekly scorecard alone misses.
+trends = (["improving"] * 8 + ["declining"] * 6 + ["slipping"] * 4 +
+          ["flat"] * 16 + ["volatile"] * 6)
 random.shuffle(trends)
 
 drivers = []
 for i in range(N_DRIVERS):
     drivers.append({
         "id": fake_id(),
-        "quality": rng.uniform(0.55, 0.97),   # 0 = struggling, 1 = elite
+        # 0 = struggling, 1 = elite; slipping DAs start near the top
+        "quality": rng.uniform(0.95, 1.0) if trends[i] == "slipping" else rng.uniform(0.55, 0.97),
         "trend": trends[i],
         "volume": rng.integers(450, 1500),     # typical parcels per week
         # each driver has one area they tend to slip on
@@ -81,6 +84,8 @@ def quality_this_week(d, week):
         q += 0.30 * step
     elif d["trend"] == "declining":
         q -= 0.35 * step
+    elif d["trend"] == "slipping":
+        q -= 0.15 * step
     elif d["trend"] == "volatile":
         q += rng.choice([-0.2, 0.2])
     q += rng.normal(0, 0.03)                   # normal week-to-week noise
@@ -96,6 +101,11 @@ def make_week(week):
         parcels = int(d["volume"] * rng.uniform(0.85, 1.1))
         success = 100 - (1 - q) * rng.uniform(4, 12)
         photo = 100 - (1 - q) * rng.uniform(2, 20) - (15 * (1 - q) if weak == "photo" else 0)
+        if week == N_WEEKS - 1:
+            # Something changed at the depot in the last week (say, a new photo
+            # rule), so nearly every DA drops on photos at once. This is the
+            # "fleet-wide shift" the dashboard should spot.
+            photo -= rng.uniform(4, 8)
         feedback = 100 - (1 - q) * rng.uniform(10, 25) - (10 * (1 - q) if weak == "feedback" else 0)
         dpmo = int(max(0, (1 - q) * rng.uniform(0, 9000) + (6000 * (1 - q) if weak == "dpmo" else 0)))
         escalations = int(rng.random() < (1 - q) * 0.4) + int(rng.random() < (1 - q) * 0.15)
