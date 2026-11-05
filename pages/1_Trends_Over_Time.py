@@ -15,6 +15,8 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+from access import CONTACT_LINE, uploads_unlocked
+
 st.set_page_config(page_title="Trends Over Time", page_icon="📈", layout="wide")
 
 st.title("📈 Trends Over Time")
@@ -66,12 +68,14 @@ def clean(df):
 
 
 st.sidebar.header("📂 Weekly Scorecards")
-uploads = st.sidebar.file_uploader(
-    "Upload two or more weekly CSVs",
-    type=["csv"],
-    accept_multiple_files=True,
-    help="Put the week number in each file name (for example week_07.csv) so they line up in order.",
-)
+uploads = None
+if uploads_unlocked():
+    uploads = st.sidebar.file_uploader(
+        "Upload two or more weekly CSVs",
+        type=["csv"],
+        accept_multiple_files=True,
+        help="Put the week number in each file name (for example week_07.csv) so they line up in order.",
+    )
 
 frames = []
 if uploads:
@@ -81,7 +85,7 @@ else:
     demo_files = sorted(glob.glob("data/mock_week_*.csv"))
     for i, path in enumerate(demo_files):
         frames.append((week_number(os.path.basename(path), i + 1), clean(pd.read_csv(path))))
-    st.sidebar.info("Showing six weeks of demo data (fake DAs). Upload your own weekly CSVs to replace it.")
+    st.sidebar.info("Showing six weeks of demo data with fake DAs. " + CONTACT_LINE)
 
 if len(frames) < 2:
     st.warning("Upload at least two weekly scorecards to see trends.")
