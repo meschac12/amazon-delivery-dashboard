@@ -10,6 +10,8 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans, DBSCAN
 from sklearn.decomposition import PCA
 from sklearn.neighbors import NearestNeighbors
+
+from access import CONTACT_LINE, uploads_unlocked
 import plotly.express as px
 import plotly.graph_objects as go
 
@@ -40,11 +42,13 @@ FEATURE_CANDIDATES = [
 ]
 
 # ── Data loading ──────────────────────────────────────────────────────────────
-st.sidebar.header("📂 Upload Data")
-uploaded = st.sidebar.file_uploader(
-    "Upload your scorecard CSV", type=["csv"],
-    help="Upload any weekly scorecard CSV file"
-)
+st.sidebar.header("📂 Data")
+uploaded = None
+if uploads_unlocked():
+    uploaded = st.sidebar.file_uploader(
+        "Upload your scorecard CSV", type=["csv"],
+        help="Upload any weekly scorecard CSV file"
+    )
 
 # Load sample data if nothing uploaded
 if uploaded is not None:
@@ -53,7 +57,7 @@ if uploaded is not None:
 else:
     df_raw = pd.read_csv("sample_scorecard.csv")
     week_label = "Demo data (latest week, fake DAs)"
-    st.sidebar.info("Using demo data with fake DAs. Upload your own CSV to analyse a real week.")
+    st.sidebar.info("Showing demo data with fake DAs. " + CONTACT_LINE)
 
 st.sidebar.markdown(f"**Loaded:** {week_label}")
 
